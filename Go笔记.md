@@ -383,60 +383,239 @@ go build ./...
 官网：https://gin-gonic.com/zh-cn/docs/
 
 ```go
-r := gin.Default()
-r.GET("/" , func(c *gin.Context){
-    c.JSON(http.StatusOK,gin.H{
-        "msg":"aaaaa"        
-    })
-})
-r.Run()
+package main
+import "github.com/gin-gonic/gin"
+
+func main() {
+	r := gin.Default()
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "pong",
+		})
+	})
+	r.Run() // 监听并在 0.0.0.0:8080 上启动服务
+}
 
 // gin.H 本质上是一个map  key：string v：interface{}
 ```
 
-gin.Default()
-
-gin.New()
-
-它们分别做了什么？有什么区别？
+gin.Default()、gin.New()  它们分别做了什么？有什么区别？
 
 ![image-20231127201500187](Go笔记.assets/image-20231127201500187.png)
 
 ![image-20231127201630111](Go笔记.assets/image-20231127201630111.png)
 
+**Gin的路由分组**
+
+```go
+func main() {
+	router := gin.Default()
+
+	// 简单的路由组: v1
+	v1 := router.Group("/v1")
+	{
+		v1.POST("/login", loginEndpoint)
+		v1.POST("/submit", submitEndpoint)
+		v1.POST("/read", readEndpoint)
+	}
+
+	// 简单的路由组: v2
+	v2 := router.Group("/v2")
+	{
+		v2.POST("/login", loginEndpoint)
+		v2.POST("/submit", submitEndpoint)
+		v2.POST("/read", readEndpoint)
+	}
+
+	router.Run(":8080")
+}
+```
+
+**`ShouldBindQuery` 函数只绑定 url 查询参数而忽略 post 数据。**
+
+捕获  localhost:8085/testing**?name=eason&address=xyz**  中的参数信息
+
+```go
+type Person struct {
+	Name    string `form:"name"`
+	Address string `form:"address"`
+}
+func main() {
+	route := gin.Default()
+	route.Any("/testing", startPage)
+	route.Run(":8085")
+}
+
+func startPage(c *gin.Context) {
+	var person Person
+	if c.ShouldBindQuery(&person) == nil {
+		log.Println("====== Only Bind By Query String ======")
+		log.Println(person.Name)
+		log.Println(person.Address)
+	}
+	c.String(200, "Success")
+}
+```
+
+## 2.2 Gin使用中间件
+
+​		中间件介绍：https://www.cnblogs.com/Aimmi/p/15419009.html		
+
+​		gin 框架允许在请求处理过程中，加入用户自己的钩子函数，这个钩子函数就叫中间件。中间件的英文名称为 MiddleWare。		
+
+![image-20231128121421622](Go笔记.assets/image-20231128121421622.png)
+
+​		中间件非常有用，在Java中叫做面向切面编程。中间件也就是把一些需要统一的功能给抽取出来，做在一起，而不是分散在各处。如：日志系统、权限认证、登陆校验，耗时统计……
+
+​		怎么实现？？？全局变量？包名.函数？
+
+```go
+func main() {
+	// 新建一个没有任何默认中间件的路由
+	r := gin.New()
+
+	// 全局中间件
+	// Logger 中间件将日志写入 gin.DefaultWriter，即使你将 GIN_MODE 设置为 release。
+	// By default gin.DefaultWriter = os.Stdout
+	r.Use(gin.Logger())
+
+	// Recovery 中间件会 recover 任何 panic。如果有 panic 的话，会写入 500。
+	r.Use(gin.Recovery())
+
+	// 你可以为每个路由添加任意数量的中间件。
+	r.GET("/benchmark", MyBenchLogger(), benchEndpoint)
+
+	// 认证路由组
+	// authorized := r.Group("/", AuthRequired()) 和使用以下两行代码的效果完全一样:
+	authorized := r.Group("/")
+	// 路由组中间件! 在此例中，我们在 "authorized" 路由组中使用自定义创建的 AuthRequired() 中间件
+	authorized.Use(AuthRequired())
+	{
+		authorized.POST("/login", loginEndpoint)
+		authorized.POST("/submit", submitEndpoint)
+		authorized.POST("/read", readEndpoint)
+
+		// 嵌套路由组
+		testing := authorized.Group("testing")
+		testing.GET("/analytics", analyticsEndpoint)
+	}
+
+	// 监听并在 0.0.0.0:8080 上启动服务
+	r.Run(":8080")
+}
+
+// 定义中间件1
+func CustomMiddleWare(c *gin.Context){
+    now := time.Now()
+    c.Next()
+    expired := time.Now().Sub(now)
+    fmt.Println(expired)
+}
+// 定义中间件2
+func MiddleWare() gin.HandlerFunc {
+	return func(c *gin.Context) {
+	  fmt.Println("调用中间件")
+	}
+}
+
+// 上面两种定义中间间的方式本质上一样，都是使用了一个参数类型为*gin.Context的函数，调用的时候一个加括号，一个不加括号
+r.Use(MiddleWare())
+r.Use(CustomMiddleWare)
+```
+
+**Use() 函数**：常用来添加全局中间件
+
+```go
+engine := gin.Default()
+engine.Use(MiddleWare()) // 其中MiddleWare()为中间件函数
+engine.Use(MiddleWare1(), MiddleWare2(), MiddleWare3()) // 还可以同时使用多个中间件，形成中间件链条。按照写入顺序依次执行。
+```
+
+**Next()函数**：contentx.Next函数可以将中间件代码的执行顺序一分为二，Next函数之前的代码在请求处理之前执行，**当执行到Next函数时会中断向下执行，去执行具体的业务逻辑代码**，当业务逻辑代码执行完成后，在继续执行Next函数后面的代码。
+
+## 2.3 退出中间件
+
+**Abort() 函数**：Abort 函数在被调用的函数中阻止后续中间件的执行。例如，你有一个验证当前的请求是否是认证过的 Authorization 中间件。如果验证失败(例如，密码不匹配)，调用 Abort 以确保这个请求的其他函数不会被调用。有个细节需要注意，**调用 Abort 函数不会停止当前的函数的执行，除非后面跟着 return**。
+
+```go
+// 定义中间件1
+func MiddleWare1() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        fmt.Println("调用中间件1")
+        // 调用 Abort，终止执行后续的中间件
+        c.Abort()
+    }
+}
+
+// 定义中间件2
+func MiddleWare2() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        fmt.Println("调用中间件2")
+    }
+}
+
+// 定义中间件3
+func MiddleWare3() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        fmt.Println("调用中间件3")
+    }
+}
+
+// 使用
+    engine.Use(MiddleWare1(), MiddleWare2(), MiddleWare3())
+// 只有中间件1被调用，其余的中间件被取消执行，而且页面处理函数也被取消执行。
+```
+
+ 
+
+# 3 ORM
+
+ORM：Object Relation Mapping
+
+<img src="Go笔记.assets/image-20231128162532881.png" alt="image-20231128162532881" style="zoom: 50%;" />
+
+<img src="Go笔记.assets/image-20231128162757831.png" alt="image-20231128162757831" style="zoom:33%;" />
+
+GORM官网：https://gorm.io/zh_CN/docs/connecting_to_the_database.html
+
+**连接数据库：**
+
+```go
+import (
+  "gorm.io/driver/mysql"
+  "gorm.io/gorm"
+)
+
+func main() {
+  // 参考 https://github.com/go-sql-driver/mysql#dsn-data-source-name 获取详情
+  dsn := "user:pass@tcp(127.0.0.1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+  db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+}
+```
+
+**通过结构体生成表结构**
+
+新建一个结构体：
+
+```go
+type Product srtuct{
+    gorm.Model
+    Code string
+    Price uint
+}
+```
+
+其中`gorm.Model`的源码如下：
+
+![image-20231128165115540](Go笔记.assets/image-20231128165115540.png)
+
+如何通过结构体**自动迁移**成表结构？
+
+```go
+err = db.AutoMigrate(&model.Product{})
+```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-​    
 
 
 
