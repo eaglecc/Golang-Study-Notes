@@ -407,6 +407,8 @@ gin.Default()、gin.New()  它们分别做了什么？有什么区别？
 
 **Gin的路由分组**
 
+路由相关介绍：https://youngxhui.top/2019/07/gin%E4%BA%8C%E8%B7%AF%E7%94%B1/
+
 ```go
 func main() {
 	router := gin.Default()
@@ -568,7 +570,7 @@ func MiddleWare3() gin.HandlerFunc {
 
  
 
-# 3 ORM
+# 3 GORM
 
 ORM：Object Relation Mapping
 
@@ -578,10 +580,11 @@ ORM：Object Relation Mapping
 
 GORM官网：https://gorm.io/zh_CN/docs/connecting_to_the_database.html
 
-**连接数据库：**
+## 3.1 连接数据库：
 
 ```go
 import (
+    
   "gorm.io/driver/mysql"
   "gorm.io/gorm"
 )
@@ -593,7 +596,7 @@ func main() {
 }
 ```
 
-**通过结构体生成表结构**
+## 3.2 通过结构体生成表结构
 
 新建一个结构体：
 
@@ -614,6 +617,245 @@ type Product srtuct{
 ```go
 err = db.AutoMigrate(&model.Product{})
 ```
+
+## 3.3 增删改查：
+
+```go
+db.Create(&model.Product{Code:"D42",Price:200}) // 增加
+var p model.Product
+db.First(&p,1) // 查询第一条语句
+db.Frist(&p ,"code=?","D42") // 条件查询
+db.Model(&p).Update("price",300) // 更新 
+db.Model(&p).Updates(model.Product{
+    Code:"FF42",
+    Price:600,
+})
+// 删除1：真实的物理删除 delete ... from ... where id = ...
+// 删除2：数据非常宝贵，一般是软删除：flag status: 0不显示 1显示，删除的时候把flag值为0，查询的时候选择flag为1的记录
+db.Delete(&p , 2) // 软删除
+
+
+```
+
+当字段是非指针类型时：**Update()方法能更新空值**、**Updates()方法不能更新空值**
+
+当字段是指针类型时：**Update()方法能更新空值**、**Updates()方法也能更新空值**
+
+
+
+**Gorm更新数据为0值时，默认不会更新成功**
+
+解决方法1：需要借助Map
+
+```go
+db.Model(&p).Updates(map[string]interface{}{
+    "Code":"FF42",
+    "Price":0,
+})
+```
+
+解决方法2：改结构体中的属性类型：sql.NullString
+
+```go
+// 修改前：
+type Product srtuct{
+    gorm.Model
+    Code string
+    Price uint
+}
+// 修改后
+type Product srtuct{
+    gorm.Model
+    Code sql.NullString
+    Price uint
+}
+
+```
+
+## 3.4 嵌入结构体
+
+GORM优先是约定大于配置！
+
+对于匿名字段，GORM 会将其字段包含在父结构体中，例如：
+
+```go
+type User struct {
+  gorm.Model
+  Name string
+}
+// 等效于
+type User struct {
+  ID        uint           `gorm:"primaryKey"`
+  CreatedAt time.Time
+  UpdatedAt time.Time
+  DeletedAt gorm.DeletedAt `gorm:"index"`
+  Name string
+}
+```
+
+对于正常的结构体字段，你也可以通过标签 `embedded` 将其嵌入，例如：
+
+## 3.5 批量添加数据
+
+
+
+```go
+users := []model.User{
+	{Name:"小明"},
+	{Name:"小A"},
+	{Name:"小B"},
+	{Name:"小C"},
+	{Name:"小D"},
+} 
+//第一种：
+db.Create(users)
+//第二种：
+db.CreateInBatches(users,2)
+//第三种
+db.Model(&Model.User{}).Create([]map[string]interface{}{
+    {"Name":"小明"},
+	{"Name":"小A"},
+	{"Name":"小B"},
+	{"Name":"小C"},
+	{"Name":"小D"},
+})
+```
+
+
+
+# 4 RPC
+
+RPC= Remote Procedure Call (远程过程调用)
+
+
+
+<img src="Go笔记.assets/image-20231129115640765.png" alt="image-20231129115640765" style="zoom: 25%;" />
+
+## 4.1  RPC的四要素
+
+<img src="Go笔记.assets/image-20231129164309051.png" alt="image-20231129164309051" style="zoom:60%;" />
+
+服务端一定要提供一个方法给客户端调用
+
+## 4.2 GO语言原生的RPC
+
+**原生的RPC代码示例：**
+
+服务端代码：
+
+```go
+type FoodService struct {
+}
+
+func (f *FoodService) SayName(request string, resp *string) error {
+	*resp = "您点的菜是：" + request
+	return nil
+}
+
+func main() {
+	listen, err := net.Listen("tcp", ":9090")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	err = rpc.RegisterName("FoodService", &FoodService{})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	accept, err := listen.Accept()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	rpc.ServeConn(accept)
+}
+```
+
+客户端代码：
+
+```go
+func main() {
+	c, err := rpc.Dial("tcp", "localhost:9090")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	reply := ""
+	err = c.Call("FoodService.SayName", "九转大肠", &reply)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(reply)
+}
+```
+
+上述代码存在问题：客户端必须知道服务端暴露给自己的方法名称：FoodService.SayName，调用方法暴露了太多细节，不利于调用方的使用。
+
+ **原生的RPC如何支持高并发？如何跨语言？**
+
+如何实现跨语言？
+
+1. 使用  xxx.MethodName 格式
+2. json格式交互： {“method”:"FoodService.SayName",params:["爆炒小龙虾"],"id":1}
+
+如何实现高并发？
+
+​	修改服务端代码：使用for循环，循环监听客户端，每有一个客户端来了使用go关键字开辟协程
+
+```go
+	for {
+		accept, err := listen.Accept()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		//rpc.ServeConn(accept)
+		go rpc.ServeCodec(jsonrpc.NewServerCodec(accept))
+	}
+```
+
+## 4.3 GRPC+Protobuf
+
+**什么是gRPC？**
+
+​		 gRPC是开源的RPC远程过程调用框架。它使得client和server应用能够透明通信（即gRPC维护client和server之间的通信，我们只需按照一定语法进行编写即可，无需关心底层通信实现），使用gRPC能够使系统间联系更加简单。
+
+​		 使用gRPC，编写代码时能够像调用本地对象一样去调用不同机器上的远程方法，使得部署分布式应用和服务更加简单。和很多RPC系统一样，gRPC基于定义服务的思想，制定具有参数和返回值的远程调用方法。
+
+- 在服务端，其实现gRPC定义的接口并运行gRPC服务以处理客户端调用请求。
+- 在客户端，留有对应的存根stub，提供和gRPC服务端相同的方法。
+
+<img src="Go笔记.assets/image-20231129172828921.png" alt="image-20231129172828921" style="zoom:45%;" />
+
+​		 gRPC客户端和服务端可以处在不同的环境。例如gRPC服务端使用java提供服务，而gRPC客户端采用go语言请求调用gRPC服务。
+
+​		Protobuf是一种传输的语法序列化的协议
+
+<img src="Go笔记.assets/image-20231129203042932.png" alt="image-20231129203042932" style="zoom:50%;" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
