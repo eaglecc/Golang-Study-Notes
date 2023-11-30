@@ -818,9 +818,13 @@ func main() {
 
 ## 4.3 GRPC+Protobuf
 
+官网：https://grpc.io/docs/
+
+中文版：https://doc.oschina.net/grpc
+
 **什么是gRPC？**
 
-​		 gRPC是开源的RPC远程过程调用框架。它使得client和server应用能够透明通信（即gRPC维护client和server之间的通信，我们只需按照一定语法进行编写即可，无需关心底层通信实现），使用gRPC能够使系统间联系更加简单。
+​		 gRPC是开源的RPC远程过程调用框架。它使得client和server应用能够透明通信（即gRPC维护client和server之间的通信，我们只需按照一定语法进行编写即可，无需关心底层通信实现），使用gRPC能够使系统间联系更加简单。RPC与语言无关！
 
 ​		 使用gRPC，编写代码时能够像调用本地对象一样去调用不同机器上的远程方法，使得部署分布式应用和服务更加简单。和很多RPC系统一样，gRPC基于定义服务的思想，制定具有参数和返回值的远程调用方法。
 
@@ -831,17 +835,118 @@ func main() {
 
 ​		 gRPC客户端和服务端可以处在不同的环境。例如gRPC服务端使用java提供服务，而gRPC客户端采用go语言请求调用gRPC服务。
 
-​		Protobuf是一种传输的语法序列化的协议
+**什么是ProtoBuf？**
+
+​		Protocol Buffers（protobuf）是一种由Google开发的轻量级、高效的数据序列化格式。它被设计用于结构化数据的序列化，使其能够在不同系统之间进行有效的通信，同时保持高效性和可扩展性。
 
 <img src="Go笔记.assets/image-20231129203042932.png" alt="image-20231129203042932" style="zoom:50%;" />
 
+**安装protobuf：**
+
+![image-20231130204551923](Go笔记.assets/image-20231130204551923.png)
+
+**安装gRPC核心库：**
+<img src="Go笔记.assets/image-20231130204723910.png" alt="image-20231130204723910" style="zoom:100%;" />
+
+## 4.4 编写Protobuf文件
+
+proto的语法如下：这只是一个约束，最终我们使用这个约束利用工具自动生成Go语言代码。
+
+```protobuf
+// 使用proto3的语法
+syntax = "proto3";
+
+// 生成go文件的是在哪个目录哪个包下，pb目录下
+option go_package = "./pb";
+
+package pb;
+
+// 定义一个服务，Study是服务中的方法，这个方法可以接收客户端的参数，再返回服务端的响应
+service Study{
+  // rpc 服务函数名 (参数) 返回 (返回参数)
+  rpc Study(BookRequest) returns(BookResponse);
+}
+
+// message可以理解为Go中的结构体，这里面的 = 1 并不是赋值，而是这个遍历在message中的位置、message就是需要传输的数据格式的定义
+message BookRequest {
+  string name = 1;
+  // int64 age = 2;
+}
+
+message BookResponse{
+  string msg = 1;
+}
+```
+
+编写好了protoc文件后，在./proto目录下执行以下命令：
+
+```protobuf
+protoc --go_out=. hello.proto
+protoc --go-grpc_out=. hello.proto
+```
 
 
 
+## 4.5 服务端+客户端代码编写
 
+**服务端代码**
 
+- 创建gRPC Server对象，可以理解为它是Server端的抽象对象
+- 将Server（包含需要被调用的服务端接口）注册到gRPC Server的内部注册中心。这样可以在接受到请求时，通过内部的服务发现，发现该服务端接口并转接进行逻辑处理。
+- 创建Listen，监听TCP端口
+- gRPC Server开始 lis.Accept，直到Stop
 
+```go
+type server struct {
+	pb.UnimplementedStudyServer
+}
 
+func (s *server) Study(ctx context.Context, req *pb.BookRequest) (*pb.BookResponse, error) {
+	return &pb.BookResponse{Msg: "hello!" + req.Name}, nil
+}
+
+func main() {
+	// 开启端口监听
+	listen, err := net.Listen("tcp", ":9090")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// 创建gRPC服务
+	grpcServer := grpc.NewServer()
+	// 在gRPC服务端中注册我们自己编写的服务
+	pb.RegisterStudyServer(grpcServer, &server{})
+	// 启动服务
+	err = grpcServer.Serve(listen)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+}
+```
+
+**客户端代码**
+
+- 创建与给定目标（服务端）的连接交互
+- 创建server 的客户端对象
+- 发送RPC请求，等待同步响应，得到回调后返回响应结果
+- 输出响应结果
+
+```go
+func main() {
+   // 连接到server端，此处禁用安全传输，没有加密和验证
+   conn, err := grpc.Dial("127.0.0.1:9090", grpc.WithTransportCredentials(insecure.NewCredentials()))
+   if err != nil {
+      log.Fatalf("did not connect: %v", err)
+   }
+   defer conn.Close()
+   // 建立连接
+   client := pb.NewStudyClient(conn)
+   // 执行RPC调用（这个方法在服务端来实现并返回结果）
+   resp, _ := client.Study(context.Background(), &pb.BookRequest{Name: "eagle cyc"})
+   fmt.Println(resp.GetMsg())
+}
+```
 
 
 
