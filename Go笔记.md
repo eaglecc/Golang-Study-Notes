@@ -1,5 +1,9 @@
 # 1 Go基础
 
+码神之路：https://mszlu.com/go/base/01/01.html#_1-go%E5%8E%86%E5%8F%B2
+
+
+
 ## 1.1 语言基础
 
 Go 内置了以下基本类型：
@@ -373,6 +377,52 @@ go mod init 名称：新建mod的名字
 go get 依赖@版本
 
 go build ./...
+
+## 1.10 继承
+
+​		Go语言中并没有传统的类和继承的概念，而是通过组合和接口来实现代码复用和多态性。Go语言鼓励使用组合而非继承，这种方式更加灵活和简洁。在Go中，可以通过嵌套结构体来实现类似继承的效果。一个结构体可以包含另一个结构体，从而获得被嵌套结构体的字段和方法。这被称为组合。
+
+```go
+package main
+
+import "fmt"
+
+// Animal 结构体
+type Animal struct {
+    Name string
+}
+
+// Speak 方法
+func (a *Animal) Speak() {
+    fmt.Println("Animal speaks")
+}
+
+// Dog 结构体，嵌套了Animal结构体
+type Dog struct {
+    Animal
+    Breed string
+}
+
+// Speak 方法的重写
+func (d *Dog) Speak() {
+    fmt.Println("Dog barks")
+}
+
+func main() {
+    // 创建一个Dog实例
+    myDog := Dog{
+        Animal: Animal{Name: "Buddy"},
+        Breed:  "Golden Retriever",
+    }
+
+    // 调用嵌套的Animal结构体的Speak方法
+    myDog.Animal.Speak()
+
+    // 调用Dog结构体的Speak方法，会覆盖掉嵌套的Animal结构体的Speak方法
+    myDog.Speak()
+}
+
+```
 
 
 
@@ -852,8 +902,10 @@ func main() {
 
 proto的语法如下：这只是一个约束，最终我们使用这个约束利用工具自动生成Go语言代码。
 
+proto中文件介绍：https://mszlu.com/grpc/01/01.html#_3-2-hello-world
+
 ```protobuf
-// 使用proto3的语法
+// 使用proto3的语法 
 syntax = "proto3";
 
 // 生成go文件的是在哪个目录哪个包下，pb目录下
@@ -948,13 +1000,29 @@ func main() {
 }
 ```
 
+## 4.6 gRPC认证-安全传输
 
+- SSL/TLS认证方式（http2）
+- 基于Token的认证方式
+- 不采用任何措施的连接，这是不安全的连接（http1）
 
+- 自定义的身份认证
 
+​		TLS（Transport Layer Security，安全传输层），TLS是建立在传输层TCP之上的协议，服务于应用层，它的前身是SSL（Secure Socket Layer，安全套接字层），它实现了将应用层的报文进行加密后再交由TCP进行传输的功能。
 
+​		TLS协议主要解决如下三个网络安全问题：
 
+1. 保密：保密通过加密encryption实现，所有信息都加密传输，第三方无法嗅探
+2. 完整性：通过MAC校验机制，一旦被篡改，通信双方会立刻发现
+3. 认证：双方认证，双方都可以配备证书，防止身份被冒充
 
+ 
 
+**Token认证：**（客户端实现两个方法就好了）
+
+![image-20231201100701362](Go笔记.assets/image-20231201100701362.png)
+
+gRPC将各种认证方式浓缩统一到一个凭证上，可以单独使用一种凭证，比如只使用TLS凭证或者只使用自定义凭证，也可以多种凭证组合，gRPC提供统一的API验证机制，使研发人员使用方便，这也是gRPC设计的巧妙之处。
 
 
 
