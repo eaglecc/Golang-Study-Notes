@@ -618,7 +618,343 @@ func MiddleWare3() gin.HandlerFunc {
 // 只有中间件1被调用，其余的中间件被取消执行，而且页面处理函数也被取消执行。
 ```
 
- 
+ ## 2.4 Post请求数据绑定问题
+
+1. 首先定义和json文件对应的结构体，结构体中的 tag 对应json请求中的Key
+
+```go
+type SingleDrill struct {
+	DSingleNumber int    `json:"d_single_number"`
+	DGas          int    `json:"d_gas"`
+	DStart        string `json:"d_start"`
+	DEnd          string `json:"d_end"`
+    ……
+}
+
+type DrillData struct {
+	DNumber       uint          `json:"d_number"`
+	DSingleLength int           `json:"d_single_length"`
+	DDepth        int           `json:"d_depth"`
+	SingleDrill   []SingleDrill `json:"single_drill"`
+    // 注意结构体嵌套，因为Json中传入的数据可能不止一个，所以使用 结构体切片 来接收
+}
+
+type DrillRequest struct {
+	DrillName   string      `json:"drill_name"`
+	DrillNumber string      `json:"drill_number"`
+	Location    string      `json:"location"`
+	Time        string      `json:"time"`
+	DrillData   []DrillData `json:"drill_data"`
+    // 注意结构体嵌套，因为Json中传入的数据可能不止一个，所以使用 结构体切片 来接收
+}
+```
+
+2. 定义好结构体后，使用Gin框架中的POST来接收数据，使用ShouldBindJSON函数来绑定 JSON和 结构体。
+
+```go
+ginServer.POST("/drill/receive_data", receiveData)
+
+func receiveData(c *gin.Context) {
+	drillRequest := model.DrillRequest{}
+	err := c.ShouldBindJSON(&drillRequest)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	// 解析时间字符串为 time.Time 类型
+	//parsedTime, err := time.Parse("2006-01-02 15:04:05", drillRequest.Time)
+	//if err != nil {
+	//	c.JSON(400, gin.H{"error": err.Error()})
+	//	return
+	//}
+}
+```
+
+还可以使用 json := make(map[string]interface{})  类型来接收客户端的json请求
+
+## 2.5 JWT鉴权
+
+cookie、session、Token、JWT及对应的登录态机制：https://juejin.cn/post/6952873156700815374
+
+**Token技术**：
+
+- 让生产的sessionid赋予数据信息，其实也就是：token  ，比如：userid=1 —–加密算法—sdfs.232jsndfnskfhkshd.3224235f—返回客户端—后面所有的请求带着token就可以—-然后解析token—-userid=1
+- 服务端就做两个事情—-生成token/解析token/校验token
+
+
+
+token里面数据的组成：
+
+- token的建议不要放太敏感的信息。（放一个业务id即可。因为通过id还可以继续查询相关信息）
+- token必须是安全，token必须对称加密（会在服务端生成唯一秘钥串）或者非对称加密（公钥和私钥）
+- token必须要有时效性 （token时效问题。根据你当前公司的业务来决定）
+- token续期问题 （token 1个小时）(自行解决)—就生成一个新token把时间给续上。
+
+**什么是JWT？**（JSON Web Token）
+
+https://www.ruanyifeng.com/blog/2018/07/json_web_token-tutorial.html
+
+​		一般而言，用户注册登陆后会生成一个jwt token返回给浏览器，浏览器向服务端请求数据时携带`token`，服务器端使用`signature`中定义的方式进行解码，进而对token进行解析和验证。
+
+**JWT Token组成部分**
+
+![img](Go笔记.assets/v2-dea40372d962a09ac050a6d17e9dd2b2_720w.jpeg)
+
+- header: 用来指定使用的算法(HMAC SHA256 RSA)和token类型(如JWT)
+- payload: 包含声明(要求)，声明通常是用户信息或其他数据的声明，比如用户id，名称，邮箱等. 声明可分为三种: registered,public,private
+- signature: 签名部分：用来保证JWT的真实性，可以使用不同的算法
+
+**JWT(Json Web Tokens)是如何工作的**
+
+![img](Go笔记.assets/v2-82c5f75466da70b96bfd238e0f2924b3_720w.jpeg)
+
+所以，基本上整个过程分为两个阶段，第一个阶段，客户端向服务端获取token，第二阶段，客户端带着该token去请求相关的资源.
+
+通常比较重要的是，**服务端如何根据指定的规则进行token的生成**。
+
+在认证的时候，当用户用他们的凭证成功登录以后，一个JSON Web Token将会被返回。
+
+此后，token就是用户凭证了，你必须非常小心以防止出现安全问题。一般而言，你保存令牌的时候不应该超过你所需要它的时间。
+
+无论何时用户想要访问受保护的路由或者资源的时候，用户代理（通常是浏览器）都应该带上JWT，典型的，通常放在Authorization header中，用Bearer schema: `Authorization: Bearer <token>`
+
+服务器上的受保护的路由将会检查Authorization header中的JWT是否有效，如果有效，则用户可以访问受保护的资源。如果JWT包含足够多的必需的数据，那么就可以减少对某些操作的数据库查询的需要，尽管可能并不总是如此。
+
+如果token是在授权头（Authorization header）中发送的，那么跨源资源共享(CORS)将不会成为问题，因为它不使用cookie.
+
+![img](Go笔记.assets/v2-50bb47d56a98d247ab5909a0fc4ddcc1_720w.jpeg)
+
+- 客户端向授权接口请求授权
+- 服务端授权后返回一个access token给客户端
+- 客户端使用access token访问受保护的资源
+
+## 2.6 基于Token的认证和基于服务器的身份认证
+
+**1.基于服务器的认证**
+
+前面说到过session，cookie以及token的区别，在之前传统的做法就是基于存储在服务器上的session来做用户的身份认证，但是通常会有如下问题:
+
+- Sessions: 认证通过后需要将用户的session数据保存在内存中，随着认证用户的增加，内存开销会大
+- 扩展性: 由于session存储在内存中，扩展性会受限，虽然后期可以使用redis,memcached来缓存数据
+- CORS: 当多个终端访问同一份数据时，可能会遇到禁止请求的问题
+- CSRF: 用户容易受到CSRF攻击
+
+**2.Session和JWT Token的异同**
+
+都可以存储用户相关信息，但是session存储在服务端，JWT存储在客户端
+
+![img](Go笔记.assets/v2-1f9a28101bc26d90fdc057ba04310caa_720w.jpeg)
+
+**3.基于Token的身份认证如何工作**
+
+基于Token的身份认证是无状态的，服务器或者session中不会存储任何用户信息.(很好的解决了共享session的问题)
+
+- 用户携带用户名和密码请求获取token(接口数据中可使用appId,appKey)
+- 服务端校验用户凭证，并返回用户或客户端一个Token
+- 客户端存储token,并在请求头中携带Token
+- 服务端校验token并返回数据
+
+**注意:**
+
+- 随后客户端的每次请求都需要使用token
+- token应该放在header中
+- 需要将服务器设置为接收所有域的请求: `Access-Control-Allow-Origin: *`
+
+**4.用Token的好处**
+
+- 无状态和可扩展性
+- 安全: 防止CSRF攻击;token过期重新认证
+
+**5.JWT和OAuth的区别**
+
+- 1.OAuth2是一种授权框架 ，JWT是一种认证协议
+- 2.无论使用哪种方式切记用HTTPS来保证数据的安全性
+- 3.OAuth2用在`使用第三方账号登录的情况`(比如使用weibo, qq, github登录某个app)，而`JWT是用在前后端分离`, 需要简单的对后台API进行保护时使用
+
+**6.token的时限多长才合适？**
+
+使用JWT时，一个让人纠结的问题就是“Token的时限多长才合适？”。
+
+- 面对极度敏感的信息，如钱或银行数据，那就根本不要在本地存放Token，只存放在内存中。这样，随着App关闭，Token也就没有了。（一次性token）
+- 此外，将Token的时限设置成较短的时间（如1小时）。
+- 对于那些虽然敏感但跟钱没关系，如健身App的进度，这个时间可以设置得长一点，如1个月。
+- 对于像游戏或社交类App，时间可以更长些，半年或1年。
+
+并且，文章还建议增加一个“Token吊销”过程来应对Token被盗的情形，类似于当发现银行卡或电话卡丢失，用户主动挂失的过程。
+
+```go
+github.com/songzhibin97/gkit
+```
+
+
+
+## 2.7 Gin框架集成JWT
+
+1. 下载jwt组件
+
+```go
+// go get -u github.com/golang-jwt/jwt/v5
+
+go get -u github.com/dgrijalva/jwt-go
+```
+
+2. 新建jwtgo目录
+
+![image-20231203211524071](Go笔记.assets/image-20231203211524071.png)
+
+3. jwt-go.go 文件中核心部分：
+
+- **jwt数据载体：Claims**
+
+```go
+// 自定义有效载荷(这里采用自定义的Name和Email作为有效载荷的一部分)
+type CustomClaims struct {
+   Username string `json:"username"`
+   Password string `json:"password"`
+   // StandardClaims结构体实现了Claims接口(Valid()函数)
+   jwt.StandardClaims
+}
+```
+
+为什么不用StandardClaims。因为不具有业务性，可能会把内部属性破坏掉。所以自定义更加灵活。
+
+- 生成Token函数
+
+```go
+// 调用jwt-go库生成token
+// 指定编码的算法为jwt.SigningMethodHS256
+func (j *JWT) CreateToken(claims CustomClaims) (string, error) {
+   // https://gowalker.org/github.com/dgrijalva/jwt-go#Token
+   // 返回一个token的结构体指针
+   token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+   return token.SignedString(j.SigningKey)
+}
+```
+
+- 解析token  & 校验token
+
+```go
+// token解码
+func (j *JWT) ParserToken(tokenString string) (*CustomClaims, error) {
+   // https://gowalker.org/github.com/dgrijalva/jwt-go#ParseWithClaims
+   // 输入用户自定义的Claims结构体对象,token,以及自定义函数来解析token字符串为jwt的Token结构体指针
+   // Keyfunc是匿名函数类型: type Keyfunc func(*Token) (interface{}, error)
+   // func ParseWithClaims(tokenString string, claims Claims, keyFunc Keyfunc) (*Token, error) {}
+   token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+      return j.SigningKey, nil
+   })
+
+   if err != nil {
+      // https://gowalker.org/github.com/dgrijalva/jwt-go#ValidationError
+      // jwtgo.ValidationError 是一个无效token的错误结构
+      if ve, ok := err.(*jwt.ValidationError); ok {
+         // ValidationErrorMalformed是一个uint常量，表示token不可用
+         if ve.Errors&jwt.ValidationErrorMalformed != 0 {
+            return nil, TokenMalformed
+            // ValidationErrorExpired表示Token过期
+         } else if ve.Errors&jwt.ValidationErrorExpired != 0 {
+            return nil, TokenExpired
+            // ValidationErrorNotValidYet表示无效token
+         } else if ve.Errors&jwt.ValidationErrorNotValidYet != 0 {
+            return nil, TokenNotValidYet
+         } else {
+            return nil, TokenInvalid
+         }
+      }
+   }
+
+   // 将token中的claims信息解析出来并断言成用户自定义的有效载荷结构
+   if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
+      return claims, nil
+   }
+   return nil, fmt.Errorf("token无效")
+}
+```
+
+4. 在业务逻辑中添加JWT校验（一般在登录成功后颁发token，比如可以在登陆时进行用户校验，成功后未该次认证请求生成token。）
+
+```go
+// 处理认证接口函数
+func validation(c *gin.Context) {
+   type auth struct {
+      Username string `json:"username" binding:"required"`
+      Password string `json:"password" binding:"required"`
+   }
+   authData := auth{}
+   err := c.ShouldBindJSON(&authData)
+   if err != nil {
+      c.JSON(400, gin.H{"error": err.Error(), "code": "400", "result": "Bad Request"})
+      return
+   }
+   // 1. jwt生成token
+   myJwt := jwtgo.NewJWT()
+   // 2. 生成token
+   token, err2 := myJwt.CreateToken(jwtgo.CustomClaims{
+      authData.Username,
+      authData.Password,
+      jwt.StandardClaims{
+         // 签发者
+         Issuer: "XUST",
+         // 签发时间
+         IssuedAt: time.Now().Unix(),
+         // 过期时间
+         ExpiresAt: time.Now().Add(365 * 2 * 24 * time.Hour).Unix(),
+         // 生效时间(立即生效)
+         NotBefore: time.Now().Add(-10 * time.Second).Unix(),
+      },
+   })
+   if err2 != nil {
+      c.JSON(400, gin.H{"message": "token颁发不成功！"})
+      return
+   }
+   c.JSON(http.StatusOK, gin.H{"code": "200", "access_token": token})
+}
+```
+
+5. 在路由组中使用中间件来进行token验证，即使用jwt解决接口安全性
+
+```go
+// token校验中间件
+func JWTAuth() gin.HandlerFunc {
+   return func(c *gin.Context) {
+      // 获取token
+      token := c.GetHeader("Authorization")
+      if token == "" {
+         c.JSON(400, gin.H{"message": "请求未携带token，无权限访问"})
+         c.Abort()
+         return
+      }
+      // 校验token
+      newJWT := jwtgo.NewJWT()
+      parserToken, err := newJWT.ParserToken(token)
+      if err != nil {
+         c.JSON(400, gin.H{"message": "token失效了"})
+         c.Abort()
+         return
+      }
+      c.Set("claims", parserToken)
+      c.Next()
+   }
+}
+```
+
+路由组中使用该中间件：
+
+```go
+// 接口隔离，比如登录，健康检查都不需要拦截和做任何的处理
+loginRouter.InitLoginRouter(ginServer)
+codeRouter.InitCodeRouter(ginServer)
+// 业务模块接口，
+publicGroup := ginServer.Group("/api")
+// 只要接口全部使用jwt拦截
+publicGroup.Use(middle.JWTAuth())
+{
+    videoRouter.InitVideoRouter(publicGroup)
+    courseRouter.InitCourseRouter(publicGroup)
+}
+```
+
+
 
 # 3 GORM
 
