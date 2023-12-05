@@ -728,6 +728,20 @@ https://www.ruanyifeng.com/blog/2018/07/json_web_token-tutorial.html
 - 服务端授权后返回一个access token给客户端
 - 客户端使用access token访问受保护的资源
 
+![image-20231203220747956](Go笔记.assets/image-20231203220747956.png)
+
+**如何使用 refresh token 刷新 access token**？
+
+要是 access token 验证失败，则浏览器这边需要对 access token 进行更新，方法是使用 refresh token
+
+<img src="Go笔记.assets/image-20231203221034180.png" alt="image-20231203221034180" style="zoom:50%;" />
+
+- access token 的有效期比较短（比如是一周）， refresh token 的有效期比较长（比如一个月），当 acesss token 过期失效但 refresh token 未过期，则使用 refresh token 就可以获取到新的 token
+- 如果 refresh token 也失效了，服务器会在响应头返回状态码`401`，浏览器收到该状态码后要求用户`重新登录`
+- refresh token 及过期时间是存储在服务器的数据库中，只有在需要申请新的 acesss token 时才会验证，不会`一直请求`，也不需要向 session 一样一直保持在`内存`中以应对大量的请求（这就是使用token作登录态能够减轻服务器`内存压力`的体现）
+
+
+
 ## 2.6 基于Token的认证和基于服务器的身份认证
 
 **1.基于服务器的认证**
@@ -954,6 +968,59 @@ publicGroup.Use(middle.JWTAuth())
 }
 ```
 
+## 2.8 服务器部署Gin项目
+
+1. **在服务器上开启安全组，开放需要的端口**：**进入实例详情页面--->点击左下角“本实例安全组”---->安全组列表---->配置规则**
+
+   有时候我们配置了安全规则，还是无法访问8080端口，这个时候，可能是因为我们的服务器本身没有开启8080端口，需要我们进行第二步的操作。
+
+2. **服务器开启8080端口**
+
+![image-20231204194505533](Go笔记.assets/image-20231204194505533.png)
+
+涉及到的相关命令解释：
+
+firewall-cmd --zone=public --add-port=8080/tcp --permanent   # 开放8080端口
+
+firewall-cmd --zone=public --remove-port=8080/tcp --permanent  #关闭8080端口
+
+firewall-cmd --reload   # 配置立即生效
+
+通过以上两步，我们就可以访问服务器的8080端口了。
+
+3. **打包本地项目（Windows端实现采用以下命令：也可以在Linux下直接使用go run ...实现，但是要在Linux系统中安装go环境）**
+
+```sh
+set CGO_ENABLED=0
+set GOARCH=amd64
+set GOOS=linux/windows
+go build -o 目录/可执行文件的名字(.exe)  main.go
+go build -o 目录/可执行文件的名字(.exe) 
+```
+
+比如：
+
+```sh
+set CGO_ENABLED=0
+set GOARCH=amd64
+set GOOS=linux/windows
+go build -o build/ginweb(.exe)  main.go
+go build -o build/ginweb(.exe) 
+```
+
+4. 把生成的ginweb文件上传到服务器中
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # 3 GORM
@@ -965,6 +1032,15 @@ ORM：Object Relation Mapping
 <img src="Go笔记.assets/image-20231128162757831.png" alt="image-20231128162757831" style="zoom:33%;" />
 
 GORM官网：https://gorm.io/zh_CN/docs/connecting_to_the_database.html
+
+```go
+// 安装MySQL驱动
+go get -u gorm.io/driver/mysql
+// 安装gorm包
+go get -u gorm.io/gorm
+```
+
+
 
 ## 3.1 连接数据库：
 
@@ -982,6 +1058,25 @@ func main() {
 }
 ```
 
+可以修改上述代码提升可移植性
+
+```go
+func connectMySQLDB() {
+   // 1. 连接数据库
+   username := "root"
+   password := "root"
+   host := "127.0.0.1"
+   port := 3306
+   dbname := "manage"
+   dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port, dbname)
+   db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+   if err != nil {
+      panic("数据库连接失败,error=" + err.Error())
+   }
+   fmt.Println(db)
+}
+```
+
 ## 3.2 通过结构体生成表结构
 
 新建一个结构体：
@@ -991,6 +1086,32 @@ type Product srtuct{
     gorm.Model
     Code string
     Price uint
+}
+```
+
+当有结构体嵌套时，可以采用以下标签，来保证数据库的生成
+
+```go
+gorm:"embedded"
+```
+
+如有结构体如下：
+
+```go
+type DrillData struct {
+   DNumber       uint        `json:"d_number" binding:"required"`
+   DSingleLength int         `json:"d_single_length" binding:"required"`
+   DDepth        int         `json:"d_depth" binding:"required"`
+   SingleDrill   SingleDrill `json:"single_drill" binding:"required" gorm:"embedded"`
+}
+
+type DrillRequest struct {
+   gorm.Model
+   DrillName   string    `json:"drill_name" binding:"required"`
+   DrillNumber string    `json:"drill_number" binding:"required"`
+   Location    string    `json:"location" binding:"required"`
+   Time        string    `json:"time" binding:"required"`
+   DrillData   DrillData `json:"drill_data" binding:"required" gorm:"embedded"`
 }
 ```
 
