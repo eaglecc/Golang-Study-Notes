@@ -1004,19 +1004,31 @@ go build -o 目录/可执行文件的名字(.exe)
 set CGO_ENABLED=0
 set GOARCH=amd64
 set GOOS=linux/windows
-go build -o build/ginweb(.exe)  main.go
-go build -o build/ginweb(.exe) 
+go build -o build/drill(.exe)  main.go
+go build -o build/drill(.exe) 
 ```
 
-4. 把生成的ginweb文件上传到服务器中
+4. **把生成的drill文件上传到服务器中**,并使用chmod +x .. 命令添加执行权限
 
+新建一个/www
 
+```sh
+mkdir -p /www/ginweb
+cd /www/ginweb
+```
 
+- mkdir -p /www/ginweb  递归创建文件夹
+- cd /www/ginweb  进入指定的文件夹
 
+![image-20231205120744215](Go笔记.assets/image-20231205120744215.png)
 
+5. **修改drill为守护进程运行**
 
+守护方式启动 (后台方式启动)
 
-
+```sh
+nohup ./drill &
+```
 
 
 
