@@ -1008,7 +1008,7 @@ go build -o build/drill(.exe)  main.go
 go build -o build/drill(.exe) 
 ```
 
-4. **把生成的drill文件上传到服务器中**,并使用chmod +x .. 命令添加执行权限
+4. **把生成的drill文件上传到服务器中**,并使用**chmod +x ..** 命令添加执行权限
 
 新建一个/www
 
@@ -1028,6 +1028,20 @@ cd /www/ginweb
 
 ```sh
 nohup ./drill &
+```
+
+关闭该进程：
+
+先查找到该进程：
+
+```
+ps -ef | grep drill
+```
+
+然后使用kill命令杀掉
+
+```
+kill PID
 ```
 
 
