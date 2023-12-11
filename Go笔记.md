@@ -424,6 +424,41 @@ func main() {
 
 ```
 
+## 1.11 Context上下文
+
+在Go语言中，`context.Context`是一个非常有用的工具，用于**在程序中传递截止日期、取消信号、超时值和其他截断相关的元数据**。它主要用于在函数调用链上传递这些值，以便于跟踪和控制程序的执行。
+
+- **超时和取消：** `Context`可以帮助在一定时间内自动取消操作，以避免无限期地等待某些事件。通过在`Context`中设置超时，可以确保操作在规定时间内完成，否则将被取消。
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+// 使用ctx进行操作，当超过5秒时，ctx会自动取消相关操作。
+```
+
+- **截止日期：** `Context`还允许在特定日期之前取消操作，以便在需要的情况下终止程序的执行。
+
+```go
+deadline := time.Now().Add(1 * time.Hour)
+ctx, cancel := context.WithDeadline(context.Background(), deadline)
+defer cancel()
+// 使用ctx进行操作，当超过截止日期时，ctx会自动取消相关操作。
+```
+
+- **值传递：** `Context`可以用于**在函数调用链上传递值**，**而不是在每个函数签名中显式传递。**
+
+```go
+ctx := context.WithValue(context.Background(), key, value)
+```
+
+- **取消信号传递：** 通过`Context`，可以在一个地方取消多个相关的操作，而不是一个一个手动取消。
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+// ...
+cancel() // 取消与该Context相关的所有操作。
+```
+
 
 
 # 2 Go Web 开发
