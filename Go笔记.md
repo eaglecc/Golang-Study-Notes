@@ -1542,6 +1542,173 @@ func main() {
 
 gRPC将各种认证方式浓缩统一到一个凭证上，可以单独使用一种凭证，比如只使用TLS凭证或者只使用自定义凭证，也可以多种凭证组合，gRPC提供统一的API验证机制，使研发人员使用方便，这也是gRPC设计的巧妙之处。
 
+ ## 4.7 3种流模式
+
+1. Proto文件编写
+
+```protobuf
+syntax = "proto3";
+
+option go_package = "/pb";
+package pb;
+
+service FoodService{
+  rpc SayName(FoodStreamRequest) returns (stream FoodStreamResponse); // 服务端流模式
+  rpc PostName(stream FoodStreamRequest) returns (FoodStreamResponse); // 客户端流模式
+  rpc FullStream(stream FoodStreamRequest ) returns (stream FoodStreamResponse); // 双向流模式
+}
+
+message FoodStreamRequest{
+  string name = 1;
+}
+
+message FoodStreamResponse{
+  string name = 1;
+}
+```
+
+SayName：服务端流模式代码，即服务端发送的消息是流文件，客户端接收
+
+PostName：客户端流模式
+
+FullStream：双向流模式
+
+```go
+type FoodService struct {
+   pb.UnimplementedFoodServiceServer
+}
+
+func (f *FoodService) SayName(req *pb.FoodStreamRequest, server pb.FoodService_SayNameServer) error {
+   fmt.Println("SayName服务被请求")
+   server.Send(&pb.FoodStreamResponse{
+      Name: "你好：" + req.Name,
+   })
+   return nil
+}
+
+func (f *FoodService) PostName(server pb.FoodService_PostNameServer) error {
+	for {
+		recv, err := server.Recv()
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+		fmt.Println(recv.Name + ",您慢用！")
+	}
+	return nil
+}
+
+func (f *FoodService) FullStream(server pb.FoodService_FullStreamServer) error {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	c := make(chan string, 5)
+	go func() {
+		defer wg.Done()
+		for {
+			item, err := server.Recv()
+			if err != nil {
+				fmt.Println(err)
+			}
+			c <- item.Name
+			fmt.Println("已下单:" + item.Name)
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for {
+			foodName := <-c
+			err := server.Send(&pb.FoodStreamResponse{Name: "菜" + foodName + "做好了"})
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+			time.Sleep(time.Second * 1)
+		}
+	}()
+	wg.Wait()
+	return nil
+}
+
+func main() {
+   listen, err := net.Listen("tcp", "localhost:9999")
+   if err != nil {
+      panic(err)
+   }
+   server := grpc.NewServer()
+   pb.RegisterFoodServiceServer(server, &FoodService{})
+   err = server.Serve(listen)
+   if err != nil {
+      panic(err)
+   }
+}
+```
+
+
+
+SayName：客户端接收后，处理流文件：
+
+```go
+// 1. 服务端流模式，返回的是一串流文件
+func main() {
+   conn, err := grpc.Dial("localhost:9999", grpc.WithTransportCredentials(insecure.NewCredentials()))
+   if err != nil {
+      panic(err)
+   }
+   client := pb.NewFoodServiceClient(conn)
+   // 服务端流模式，返回的是一串流文件
+   resp, err := client.SayName(context.Background(), &pb.FoodStreamRequest{Name: "小明"})
+   if err != nil {
+      panic(err)
+   }
+   // 服务端流模式客户端接收方式
+   for {
+      recv, err := resp.Recv()
+      if err != nil {
+         fmt.Println(err)
+         break
+      }
+      fmt.Println(recv)
+   }
+}
+// 2. 客户端流模式
+func main() {
+	conn, err := grpc.Dial("localhost:9999", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
+	}
+	client := pb.NewFoodServiceClient(conn)
+	postNameClient, err := client.PostName(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	foods := []string{"aaa", "bbb", "ccc", "ddd"}
+	for _, v := range foods {
+		fmt.Println("上菜：" + v)
+		err := postNameClient.Send(&pb.FoodStreamRequest{
+			Name: v,
+		})
+		time.Sleep(1 * time.Second)
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+	}
+}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1616,7 +1783,127 @@ etcd具有以下特点：
 
 
 
+# 6 WebSocket
 
+## 6.1 WebSocket和Http
+
+https://www.ruanyifeng.com/blog/2017/05/websocket.html
+
+ WebSocket和 HTTP 协议的区别？
+
+答案很简单，因为 HTTP 协议有一个缺陷：通信只能由客户端发起。
+
+举例来说，我们想了解今天的天气，只能是客户端向服务器发出请求，服务器返回查询结果。**HTTP 协议做不到服务器主动向客户端推送信息**。
+
+<img src="Go笔记.assets/image-20231221175138319.png" alt="image-20231221175138319" style="zoom:50%;" />
+
+WebSocket 协议在2008年诞生，2011年成为国际标准。所有浏览器都已经支持了。
+
+它的最大特点就是，**服务器可以主动向客户端推送信息**，客户端也可以主动向服务器发送信息，是真正的双向平等对话，属于[服务器推送技术](https://en.wikipedia.org/wiki/Push_technology)的一种。
+
+<img src="Go笔记.assets/image-20231221175336743.png" alt="image-20231221175336743" style="zoom:67%;" />
+
+其他特点包括：
+
+（1）建立在 TCP 协议之上，服务器端的实现比较容易。
+
+（2）与 HTTP 协议有着良好的兼容性。默认端口也是80和443，并且握手阶段采用 HTTP 协议，因此握手时不容易屏蔽，能通过各种 HTTP 代理服务器。
+
+（3）数据格式比较轻量，性能开销小，通信高效。
+
+（4）可以发送文本，也可以发送二进制数据。
+
+（5）没有同源限制，客户端可以与任意服务器通信。
+
+（6）协议标识符是`ws`（如果加密，则为`wss`），服务器网址就是 URL。
+
+## 6.2 **websocket客户端API**
+
+WebSocket 对象作为一个构造函数，用于新建 WebSocket 实例。
+
+> ```javascript
+> var ws = new WebSocket('ws://localhost:8080');
+> ```
+
+执行上面语句之后，客户端就会与服务器进行连接。
+
+**webSocket.readyState**
+
+`readyState`属性返回实例对象的当前状态，共有四种。
+
+> - CONNECTING：值为0，表示正在连接。
+> - OPEN：值为1，表示连接成功，可以通信了。
+> - CLOSING：值为2，表示连接正在关闭。
+> - CLOSED：值为3，表示连接已经关闭，或者打开连接失败。
+
+**webSocket.onopen**
+
+实例对象的`onopen`属性，用于指定连接成功后的回调函数。
+
+> ```javascript
+> ws.onopen = function () {
+>   ws.send('Hello Server!');
+> }
+> ```
+
+如果要指定多个回调函数，可以使用`addEventListener`方法。
+
+> ```javascript
+> ws.addEventListener('open', function (event) {
+>   ws.send('Hello Server!');
+> });
+> ```
+
+ **webSocket.onclose**
+
+实例对象的`onclose`属性，用于指定连接关闭后的回调函数。
+
+> ```javascript
+> ws.onclose = function(event) {
+>   var code = event.code;
+>   var reason = event.reason;
+>   var wasClean = event.wasClean;
+>   // handle close event
+> };
+> 
+> ws.addEventListener("close", function(event) {
+>   var code = event.code;
+>   var reason = event.reason;
+>   var wasClean = event.wasClean;
+>   // handle close event
+> });
+> ```
+
+**webSocket.onmessage**
+
+实例对象的`onmessage`属性，用于指定收到服务器数据后的回调函数。
+
+> ```javascript
+> ws.onmessage = function(event) {
+>   var data = event.data;
+>   // 处理数据
+> };
+> 
+> ws.addEventListener("message", function(event) {
+>   var data = event.data;
+>   // 处理数据
+> });
+> ```
+
+注意，服务器数据可能是文本，也可能是二进制数据（`blob`对象或`Arraybuffer`对象）。
+
+```javascript
+ws.onmessage = function(event){
+  if(typeof event.data === String) {
+    console.log("Received data string");
+  }
+
+  if(event.data instanceof ArrayBuffer){
+    var buffer = event.data;
+    console.log("Received arraybuffer");
+  }
+}
+```
 
 
 
