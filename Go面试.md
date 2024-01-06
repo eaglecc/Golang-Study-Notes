@@ -379,6 +379,67 @@ func main() {
 
 
 
+## 1.5 Go包管理的方式有哪些？
+
+GoPATH ( < Go1.5) -->  Go Vendor (>=Go1.5)  -->  Go Modules(>=Go1.11)
+
+- **GoPATH模式：**
+  - 2009.11.10随Go语言诞生
+  - 通过统一包存放的路径实现包管理（本质是只是提供了一个存放包路径的环境变量）
+  - 不支持依赖包的版本控制
+- **Go Modules模式**
+  - 2018年8月，go1.11版本中，Go111MODULE=on开启
+  - Go1.13开始，Go moudules默认启用
+
+- **GoPATH模式和GoPATH路径的区别**
+  - GoPath 模式是指我们通过GoPath来管理我们的包
+  - GoPath路径值指的是Gopath这个环境变量的路径（不管我们使用那种包管理方式，都可以由GoPath路径，并不是说设置了GOPath路径就一定使用了GoPath模式）
+- **GoRoot 和GoPath路径的区别**
+  - GoRoot 是Golang的安装目录（存放的是Go语言内置的安装包、工具类）
+  - GoPATH是Go语言指定的工作空间
+    - GoPATH目录和GoRoot目录不能是同一个目录
+    - GoPATH模式下，我们的**工程代码就必须放在Gopath/src目录下**
+- **go get 、 go build 、 go install、go run 命令区别**
+  - go get 将远程代码克隆到 $GOPATH/src目录下，然后执行go install命令，可以加上-d 指定仅下载不安装
+  - go install  
+    - 如果是可生成**可执行的二进制文件，存储在 $GOPATH/bin**目录下
+    - 普通包，将会编译**生成.a 结尾的文件，放到$GoPATH/pkg目**录下
+  - go build 默认会在当前目录下编译生成可执行的文件，可指定路径，而且go build不会将可执行目录放置在 $GOPATH/bin目录下
+  - go run 编译并运行go文件，go run 不依赖GOPATH，智能编译可执行的go文件
+- **GoPATH目录下三个文件：**
+  - src 存放源代码文件
+  - pkg 存放编译后的文件
+  - bin 存放编译后的可执行文件
+
+
+
+- **如何使用Go Modules？**
+
+<img src="Go面试.assets/image-20240106175207097.png" alt="image-20240106175207097" style="zoom:50%;" />
+
+GO111MODULE=on 只是开启Go Modules的前提，还需要通过go mod init初始化工程
+
+go mod常用指令
+
+1. go mod init
+2. go mod tidy
+3. go mod download
+4. go mod vendor
+
+![image-20240106180313699](Go面试.assets/image-20240106180313699.png)
+
+![image-20240106180413316](Go面试.assets/image-20240106180413316.png)
+
+![image-20240106180543967](Go面试.assets/image-20240106180543967.png)
+
+![image-20240106180649972](Go面试.assets/image-20240106180649972.png)
+
+
+
+ 
+
+  
+
 
 
 
