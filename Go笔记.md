@@ -459,6 +459,23 @@ ctx, cancel := context.WithCancel(context.Background())
 cancel() // 取消与该Context相关的所有操作。
 ```
 
+
+
+**db.WithContext函数**
+
+```go
+func NewDBClient(ctx context.Context) *gorm.DB {
+   db := _db
+   return db.WithContext(ctx)
+}
+```
+
+当使用 `WithContext` 方法将上下文与 `db` 关联时，`db` 将遵循上下文的生命周期。如果在创建 `db` 后，相关的上下文被取消（`context` 的 `Done` 通道被关闭），那么与该上下文关联的 `db` 操作也可能会被取消
+
+
+
+
+
 ## 1.12 Goroutine
 
 
@@ -467,7 +484,32 @@ cancel() // 取消与该Context相关的所有操作。
 
 
 
+## 1.13 闭包
 
+
+在Go语言中，闭包（closure）是指一个**包含了函数体和它所引用的一个或多个变量的函数值。闭包允许将函数作为变量传递、存储，并在需要的时候调用。闭包的特点是它可以访问定义时的变量，即使这些变量在执行时已经不在同一作用域也可以。**
+
+一个闭包通常由两部分组成：
+
+1. 函数体（代码块）：包含了实际的操作或计算逻辑。
+2. 闭包的环境：**保存了在闭包函数体中引用的外部变量。**
+
+```go
+func main() {
+    // 外部变量 x
+    x := 10
+
+    // 闭包函数
+    add := func(y int) int {
+        // 在闭包中引用了外部变量 x
+        return x + y
+    }
+
+    // 调用闭包函数
+    result := add(5)
+    fmt.Println(result) // 输出 15
+}
+```
 
 
 
