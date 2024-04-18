@@ -1,0 +1,11 @@
+# 描述 Compose 文件的版本信息
+version: "3.8"
+# 定义服务，可以多个
+services:
+  mycentos: # 服务名称
+    build:  # 相对当前 docker-compose.yml 文件所在目录，基于名称为 Dockerfile 的文件构建镜像
+      context: .
+      dockerfile: Dockerfile-alternate
+    container_name: mycentos7 # 容器名称，默认为"工程名称_服务条目名称_序号"
+    ports: # 宿主机与容器的端口映射关系
+      - "8080:8080" # 左边宿主机端口:右边容器端口

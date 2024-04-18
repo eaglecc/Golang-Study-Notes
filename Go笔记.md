@@ -1099,6 +1099,8 @@ go build -o 目录/可执行文件的名字(.exe)
 
 比如：
 
+![image-20240411203405862](Go笔记.assets/image-20240411203405862.png)
+
 ```sh
 set CGO_ENABLED=0
 set GOARCH=amd64
@@ -1977,8 +1979,6 @@ ws.onmessage = function(event){
   }
 }
 ```
-
-
 
 
 
