@@ -20,9 +20,9 @@
   * [Docker容器编排](Docker/08/08.md)
   * [Docker Swarm](Docker/09/09.md)
 * [K8S](k8s教程)
-  * [01基础介绍](k8s教程/01-基础介绍【微信号 itcodeba 】/01-基础介绍/01.md)
-  * [02安装](k8s教程/02-安装【微信号 itcodeba 】/02-安装/02.md)
-  * [03命令](k8s教程/03-命令详解【微信号 itcodeba 】/03-命令详解/03.md)
+  * [01基础介绍](k8s教程/01-基础介绍/01-基础介绍/01.md)
+  * [02安装](k8s教程/02-安装/02-安装/02.md)
+  * [03命令](k8s教程/03-命令详解/03-命令详解/03.md)
   * 
 * [protobuf](protobuf/README.md)
   * [gRPC教程](protobuf/01/01.md)
